@@ -1,0 +1,102 @@
+package repository
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/joalberto902/tasks-api/internal/model"
+)
+
+func TestCreate(t *testing.T) {
+	tests := []struct {
+		name           string
+		title          string
+		status         model.TaskStatus
+		description    string
+		expectedErr    error
+		expectedTitle  string
+		expectedStatus model.TaskStatus
+	}{
+		{name: "empty title", title: "", status: "", description: "", expectedErr: ErrInvalidTitle},
+		{name: "only space title", title: " ", status: "", description: "", expectedErr: ErrInvalidTitle},
+		{name: "only breakline char title", title: "\n", status: "", description: "", expectedErr: ErrInvalidTitle},
+		{name: "only tab char title", title: "\t", status: "", description: "", expectedErr: ErrInvalidTitle},
+		{name: "multiple spaces title", title: "   ", status: "", description: "", expectedErr: ErrInvalidTitle},
+		{name: "random invalid status", title: "title", status: "banana", description: "", expectedErr: ErrInvalidStatus},
+		{name: "Uppercase invalid status", title: "title", status: "TODO", description: "", expectedErr: ErrInvalidStatus},
+		{name: "valid empty status", title: "title", status: "", description: "", expectedErr: nil, expectedTitle: "title", expectedStatus: model.StatusTodo},
+		{name: "testing status todo", title: "title", status: model.StatusTodo, description: "", expectedErr: nil, expectedTitle: "title", expectedStatus: model.StatusTodo},
+		{name: "testing status ongoing", title: "title", status: model.StatusOngoing, description: "", expectedErr: nil, expectedTitle: "title", expectedStatus: model.StatusOngoing},
+		{name: "testing status done", title: "title", status: model.StatusDone, description: "", expectedErr: nil, expectedTitle: "title", expectedStatus: model.StatusDone},
+		{name: "status todo with description", title: "title", status: model.StatusTodo, description: "desc", expectedErr: nil, expectedTitle: "title", expectedStatus: model.StatusTodo},
+		{name: "status ongoing with description", title: "title", status: model.StatusOngoing, description: "desc", expectedErr: nil, expectedTitle: "title", expectedStatus: model.StatusOngoing},
+		{name: "status done with description", title: "title", status: model.StatusDone, description: "desc", expectedErr: nil, expectedTitle: "title", expectedStatus: model.StatusDone},
+		{name: "title with spaces and letters", title: "  title  ", status: model.StatusDone, description: "desc", expectedErr: nil, expectedTitle: "title", expectedStatus: model.StatusDone},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := NewTaskRepository()
+			startTime := time.Now().UTC()
+			task, err := repo.Create(
+				context.Background(),
+				CreateTaskParams{
+					Title:       tt.title,
+					Status:      tt.status,
+					Description: tt.description,
+				})
+
+			endTime := time.Now().UTC()
+			if !errors.Is(err, tt.expectedErr) {
+				t.Fatalf("error is different than %v. got=%v", tt.expectedErr, err)
+			}
+
+			if err != nil {
+				empty := model.Task{}
+				if task != empty {
+					t.Fatalf("task is not empty if Create is expected to error")
+				}
+				return
+			}
+
+			if task.ID == uuid.Nil {
+				t.Fatalf("uuid is nil")
+			}
+
+			if task.ID.Version() != uuid.Version(7) {
+				t.Fatalf("expected uuid v%d. got = %d", 7, task.ID.Version())
+			}
+
+			if task.CreatedAt.Before(startTime) || task.CreatedAt.After(endTime) {
+				t.Fatalf("CreatedAt in the incorrect time window")
+			}
+
+			if !task.UpdatedAt.Equal(task.CreatedAt) || task.UpdatedAt.Before(startTime) || task.UpdatedAt.After(endTime) {
+				t.Fatalf("UpdatedAt in the incorrect time window")
+			}
+
+			if task.CreatedAt.Location() != time.UTC {
+				t.Fatalf("CreatedAt is not in utc")
+			}
+
+			if task.UpdatedAt.Location() != time.UTC {
+				t.Fatalf("UpdatedAt is not in utc")
+			}
+
+			if task.Title != tt.expectedTitle {
+				t.Errorf("Wrong title, expected=%s. got=%s", tt.expectedTitle, task.Title)
+			}
+
+			if task.Status != tt.expectedStatus {
+				t.Errorf("Wrong status, expected=%v. got=%v", tt.expectedStatus, task.Status)
+			}
+
+			if task.Description != tt.description {
+				t.Errorf("Wrong description, expected=%s. got=%s", tt.description, task.Description)
+			}
+		})
+	}
+}
