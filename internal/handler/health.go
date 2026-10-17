@@ -2,8 +2,8 @@ package handler
 
 import (
 	"encoding/json"
-	"net/http"
 	"log"
+	"net/http"
 )
 
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
