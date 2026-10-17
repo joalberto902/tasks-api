@@ -1,0 +1,52 @@
+# Binários compilados
+/bin/
+/dist/
+/api
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Saídas de teste e cobertura
+*.test
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+# Dependências vendorizadas (remova esta linha se decidir usar `go mod vendor`)
+vendor/
+
+# Variáveis de ambiente e segredos (nunca commitar)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Bancos de dados locais (SQLite) e dados do Docker
+*.db
+*.sqlite
+*.sqlite3
+/data/
+/pgdata/
+
+# Logs e temporários
+*.log
+/tmp/
+
+# Workspace do Go (uso local)
+go.work
+go.work.sum
+
+# Editores e IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
