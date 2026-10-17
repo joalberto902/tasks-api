@@ -1,10 +1,11 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/joalberto902/tasks-api/internal/handler"
 )
 
 const (
@@ -12,25 +13,9 @@ const (
 	healthEndpoint = "/health"
 )
 
-type healthStatusResponse struct {
-	Status string `json:"status"`
-}
-
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	payload, err := json.Marshal(healthStatusResponse{Status: "ok"})
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(payload)
-}
-
 func main() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET "+healthEndpoint, healthHandler)
+	mux.HandleFunc("GET "+healthEndpoint, handler.HealthHandler)
 
 	server := http.Server{
 		Addr:              port,
