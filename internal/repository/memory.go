@@ -103,3 +103,18 @@ func (tr *taskRepository) List(ctx context.Context) ([]model.Task, error) {
 
 	return taskSlice, nil
 }
+
+func (tr *taskRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	tr.rwm.Lock()
+	defer tr.rwm.Unlock()
+
+	//Verifying if id is in repo
+	_, ok := tr.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+
+	delete(tr.data, id)
+
+	return nil
+}
