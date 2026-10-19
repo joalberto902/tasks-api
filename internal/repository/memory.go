@@ -1,7 +1,9 @@
 package repository
 
 import (
+	"bytes"
 	"context"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -76,4 +78,28 @@ func (tr *taskRepository) Get(ctx context.Context, id uuid.UUID) (model.Task, er
 
 	rtask := *task
 	return rtask, nil
+}
+
+func (tr *taskRepository) List(ctx context.Context) ([]model.Task, error) {
+	//Maybe the function should error if the context timesout
+	tr.rwm.RLock()
+	defer tr.rwm.RUnlock()
+
+	taskSlice := make([]model.Task, 0, len(tr.data))
+	for _, task := range tr.data {
+		taskSlice = append(taskSlice, *task)
+	}
+
+	cmp := func(a, b model.Task) int {
+		timeComp := a.CreatedAt.Compare(b.CreatedAt)
+		if timeComp != 0 {
+			return timeComp
+		}
+
+		return bytes.Compare(a.ID[:], b.ID[:])
+	}
+
+	slices.SortFunc(taskSlice, cmp)
+
+	return taskSlice, nil
 }
