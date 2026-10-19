@@ -176,3 +176,31 @@ func TestList(t *testing.T) {
 		t.Errorf("Wrong list slice, expected=%v. got=%v", expectedSlice, list)
 	}
 }
+
+func TestDelete(t *testing.T) {
+	ctx := context.Background()
+	repo := NewTaskRepository()
+
+	expectedTask, err := repo.Create(ctx, CreateTaskParams{
+		Title:  "test",
+		Status: model.StatusTodo,
+	})
+	if err != nil {
+		t.Fatalf("Error: Create failed, %v", err)
+	}
+
+	err = repo.Delete(ctx, expectedTask.ID)
+	if err != nil {
+		t.Fatalf("Wrong error, expected nil. got=%v", err)
+	}
+
+	_, err = repo.Get(ctx, expectedTask.ID)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Wrong error while trying to get deleted task, expected %v, got %v", ErrNotFound, err)
+	}
+
+	err = repo.Delete(ctx, expectedTask.ID)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Wrong error while delete already deleted task, expected %v, got %v", ErrNotFound, err)
+	}
+}
