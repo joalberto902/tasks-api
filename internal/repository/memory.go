@@ -118,3 +118,49 @@ func (tr *taskRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 	return nil
 }
+
+func (tr *taskRepository) Update(
+	ctx context.Context,
+	id uuid.UUID,
+	arg UpdateTaskParams,
+) (model.Task, error) {
+	tr.rwm.Lock()
+	defer tr.rwm.Unlock()
+
+	task, ok := tr.data[id]
+	if !ok {
+		return model.Task{}, ErrNotFound
+	}
+
+	newTitle := task.Title
+	if arg.Title != nil {
+		newTitle = strings.TrimSpace(*arg.Title)
+		if newTitle == "" {
+			return model.Task{}, ErrInvalidTitle
+		}
+	}
+
+	newStatus := task.Status
+	if arg.Status != nil {
+		newStatus = *arg.Status
+		if newStatus == "" {
+			newStatus = model.StatusTodo
+		}
+
+		if !newStatus.IsValid() {
+			return model.Task{}, ErrInvalidStatus
+		}
+	}
+
+	newDesc := task.Description
+	if arg.Description != nil {
+		newDesc = *arg.Description
+	}
+
+	task.Title = newTitle
+	task.Status = newStatus
+	task.Description = newDesc
+	task.UpdatedAt = time.Now().UTC()
+
+	return *task, nil
+}
