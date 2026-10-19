@@ -100,3 +100,33 @@ func TestCreate(t *testing.T) {
 		})
 	}
 }
+
+func TestGet(t *testing.T) {
+	//Testing Create with Get
+	ctx := context.Background()
+	repo := NewTaskRepository()
+
+	expectedTask, err := repo.Create(ctx, CreateTaskParams{
+		Title:       "test title",
+		Status:      model.StatusTodo,
+		Description: "description for get test",
+	})
+
+	if err != nil {
+		t.Fatalf("Error creating new value in the repository: %v", err)
+	}
+
+	inputTask, err := repo.Get(ctx, expectedTask.ID)
+	if err != nil {
+		t.Fatalf("error does not equal %v. got=%v", nil, err)
+	}
+
+	if inputTask != expectedTask {
+		t.Errorf("Task value is not %+v. got= %+v", expectedTask, inputTask)
+	}
+
+	_, err = repo.Get(ctx, uuid.Nil)
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("error does not equal %v. got=%v", ErrNotFound, err)
+	}
+}
