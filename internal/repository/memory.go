@@ -65,3 +65,15 @@ func (tr *taskRepository) Create(
 
 	return task, nil
 }
+
+func (tr *taskRepository) Get(ctx context.Context, id uuid.UUID) (model.Task, error) {
+	tr.rwm.RLock()
+	defer tr.rwm.RUnlock()
+	task, ok := tr.data[id]
+	if !ok {
+		return model.Task{}, ErrNotFound
+	}
+
+	rtask := *task
+	return rtask, nil
+}
