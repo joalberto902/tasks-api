@@ -204,3 +204,213 @@ func TestDelete(t *testing.T) {
 		t.Fatalf("Wrong error while delete already deleted task, expected %v, got %v", ErrNotFound, err)
 	}
 }
+
+func getPtrToString(s string) *string {
+	return &s
+}
+
+func getPtrToStatus(ts model.TaskStatus) *model.TaskStatus {
+	return &ts
+}
+
+func TestUpdate(t *testing.T) {
+	baseTaskParams := CreateTaskParams{
+		Title:       "title",
+		Status:      model.StatusTodo,
+		Description: "description",
+	}
+	tests := []struct {
+		name                string
+		id                  *uuid.UUID
+		title               *string
+		status              *model.TaskStatus
+		description         *string
+		baseTask            CreateTaskParams
+		expectedTitle       string
+		expectedStatus      model.TaskStatus
+		expectedDescription string
+		expectedErr         error
+	}{
+		{
+			name:                "only title changes with actual new title",
+			id:                  nil,
+			title:               getPtrToString("New Title"),
+			status:              nil,
+			description:         nil,
+			baseTask:            baseTaskParams,
+			expectedTitle:       "New Title",
+			expectedStatus:      baseTaskParams.Status,
+			expectedDescription: baseTaskParams.Description,
+			expectedErr:         nil,
+		},
+		{
+			name:                "only title changes with actual new title trimmed",
+			id:                  nil,
+			title:               getPtrToString("   New Title   "),
+			status:              nil,
+			description:         nil,
+			baseTask:            baseTaskParams,
+			expectedTitle:       "New Title",
+			expectedStatus:      baseTaskParams.Status,
+			expectedDescription: baseTaskParams.Description,
+			expectedErr:         nil,
+		},
+		{
+			name:                "only status changes to empty string",
+			id:                  nil,
+			title:               nil,
+			status:              getPtrToStatus(""),
+			description:         nil,
+			baseTask:            CreateTaskParams{Title: "title", Status: model.StatusOngoing, Description: "description"},
+			expectedTitle:       "title",
+			expectedStatus:      model.StatusTodo,
+			expectedDescription: "description",
+			expectedErr:         nil,
+		},
+		{
+			name:                "only status changes to ongoing",
+			id:                  nil,
+			title:               nil,
+			status:              getPtrToStatus(model.StatusOngoing),
+			description:         nil,
+			expectedTitle:       baseTaskParams.Title,
+			baseTask:            baseTaskParams,
+			expectedStatus:      model.StatusOngoing,
+			expectedDescription: baseTaskParams.Description,
+			expectedErr:         nil,
+		},
+		{
+			name:                "only status changes to done",
+			id:                  nil,
+			title:               nil,
+			status:              getPtrToStatus(model.StatusDone),
+			description:         nil,
+			baseTask:            baseTaskParams,
+			expectedTitle:       baseTaskParams.Title,
+			expectedStatus:      model.StatusDone,
+			expectedDescription: baseTaskParams.Description,
+			expectedErr:         nil,
+		},
+		{
+			name:                "only description changes to empty string",
+			id:                  nil,
+			title:               nil,
+			status:              nil,
+			description:         getPtrToString(""),
+			baseTask:            baseTaskParams,
+			expectedTitle:       baseTaskParams.Title,
+			expectedStatus:      baseTaskParams.Status,
+			expectedDescription: "",
+			expectedErr:         nil,
+		},
+		{
+			name:                "only title changes with white space",
+			id:                  nil,
+			title:               getPtrToString(" "),
+			status:              nil,
+			description:         nil,
+			baseTask:            baseTaskParams,
+			expectedTitle:       baseTaskParams.Title,
+			expectedStatus:      baseTaskParams.Status,
+			expectedDescription: baseTaskParams.Description,
+			expectedErr:         ErrInvalidTitle,
+		},
+		{
+			name:                "only status changes to invalid status",
+			id:                  nil,
+			title:               nil,
+			status:              getPtrToStatus("banana"),
+			description:         nil,
+			baseTask:            baseTaskParams,
+			expectedTitle:       baseTaskParams.Title,
+			expectedStatus:      baseTaskParams.Status,
+			expectedDescription: baseTaskParams.Description,
+			expectedErr:         ErrInvalidStatus,
+		},
+		{
+			name:                "only invalid id",
+			id:                  &uuid.Nil,
+			title:               nil,
+			status:              nil,
+			description:         nil,
+			baseTask:            baseTaskParams,
+			expectedTitle:       baseTaskParams.Title,
+			expectedStatus:      baseTaskParams.Status,
+			expectedDescription: baseTaskParams.Description,
+			expectedErr:         ErrNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			repo := NewTaskRepository()
+
+			expectedTask, err := repo.Create(ctx, tt.baseTask)
+			if err != nil {
+				t.Fatalf("Failed while creating base task: %v", err)
+			}
+
+			if tt.id == nil {
+				tt.id = &expectedTask.ID
+			}
+
+			updatedTask, err := repo.Update(ctx, *tt.id, UpdateTaskParams{
+				Title:       tt.title,
+				Status:      tt.status,
+				Description: tt.description,
+			})
+
+			if !errors.Is(err, tt.expectedErr) {
+				t.Fatalf("Wrong error while updating, expected=%v. got=%v",
+					tt.expectedErr, err)
+			}
+
+			getTask, altErr := repo.Get(ctx, expectedTask.ID)
+			if altErr != nil {
+				t.Fatalf("Error while reading updated task, error: %v", altErr)
+			}
+
+			if err != nil {
+				if getTask != expectedTask {
+					t.Fatal("Expected task should not change if update fails")
+				}
+				var empty model.Task
+				if updatedTask != empty {
+					t.Fatal("When function errors task value is not empty")
+				}
+
+				return
+			}
+
+			if getTask != updatedTask {
+				t.Fatalf("Updated task is not equal to stored task, expected=%v, got=%v",
+					getTask, updatedTask)
+			}
+
+			if updatedTask.Title != tt.expectedTitle {
+				t.Errorf("Title did not update correctly, expected=%s, got=%s",
+					tt.expectedTitle, updatedTask.Title)
+			}
+
+			if updatedTask.Status != tt.expectedStatus {
+				t.Errorf("Status did not update correctly, expected=%v, got=%v",
+					tt.expectedStatus, updatedTask.Status)
+			}
+
+			if updatedTask.Description != tt.expectedDescription {
+				t.Errorf("Description did not update correctly, expected=%s, got=%s",
+					tt.expectedDescription, updatedTask.Description)
+			}
+
+			if !updatedTask.CreatedAt.Equal(expectedTask.CreatedAt) {
+				t.Errorf("CreatedAt was wrongly changed, expected=%v, got=%v",
+					expectedTask.CreatedAt, updatedTask.CreatedAt)
+			}
+
+			if updatedTask.UpdatedAt.Before(updatedTask.CreatedAt) {
+				t.Error("UpdatedAt was wrongly and is before CreatedAt")
+			}
+		})
+	}
+}
