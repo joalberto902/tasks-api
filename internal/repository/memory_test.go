@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -128,5 +129,50 @@ func TestGet(t *testing.T) {
 	_, err = repo.Get(ctx, uuid.Nil)
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("error does not equal %v. got=%v", ErrNotFound, err)
+	}
+}
+
+func TestList(t *testing.T) {
+	ctx := context.Background()
+	repo := NewTaskRepository()
+
+	s, err := repo.List(ctx)
+	if err != nil {
+		t.Fatalf("Error while generating list, %v", err)
+	}
+
+	if s == nil {
+		t.Fatal("List on a empty repository should return a non-nil slice")
+	}
+
+	if len(s) != 0 {
+		t.Fatal("List on a empty repository should a zero size slice")
+	}
+
+	tests := []CreateTaskParams{
+		{Title: "test1", Status: model.StatusTodo},
+		{Title: "test2", Status: model.StatusTodo},
+		{Title: "test3", Status: model.StatusTodo},
+		{Title: "test4", Status: model.StatusTodo},
+		{Title: "test5", Status: model.StatusTodo},
+	}
+
+	expectedSlice := make([]model.Task, 0, 5)
+	for _, tt := range tests {
+		task, err := repo.Create(ctx, tt)
+		if err != nil {
+			t.Fatalf("Failed while creating %s with the error: %v", tt.Title, err)
+		}
+
+		expectedSlice = append(expectedSlice, task)
+	}
+
+	list, err := repo.List(ctx)
+	if err != nil {
+		t.Fatalf("Error while listing: %v", err)
+	}
+
+	if !slices.Equal(expectedSlice, list) {
+		t.Errorf("Wrong list slice, expected=%v. got=%v", expectedSlice, list)
 	}
 }
