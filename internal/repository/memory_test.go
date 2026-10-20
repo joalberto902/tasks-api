@@ -414,3 +414,58 @@ func TestUpdate(t *testing.T) {
 		})
 	}
 }
+
+func TestReturnedTasksAreCopies(t *testing.T) {
+	ctx := context.Background()
+	repo := NewTaskRepository()
+
+	baseTask, err := repo.Create(ctx, CreateTaskParams{
+		Title:       "title",
+		Status:      model.StatusTodo,
+		Description: "description",
+	})
+
+	if err != nil {
+		t.Fatalf("While creating base task for testing, error: %v", err)
+	}
+
+	getTest, err := repo.Get(ctx, baseTask.ID)
+	if err != nil {
+		t.Fatalf("Error while reading base task, error: %v", err)
+	}
+
+	getTest.Title = "newTitle"
+
+	newGetTest, err := repo.Get(ctx, baseTask.ID)
+	if err != nil {
+		t.Fatalf("Error while reading new base task, error: %v", err)
+	}
+
+	if newGetTest.Title != "title" {
+		t.Errorf("second get return is not copy, expected=%s, got=%s", "title", newGetTest.Title)
+	}
+
+	firstList, err := repo.List(ctx)
+	if err != nil {
+		t.Fatalf("While generating first list, error: %v", err)
+	}
+
+	if len(firstList) < 1 {
+		t.Fatalf("First list has no elements")
+	}
+
+	firstList[0].Title = "newTitle"
+
+	secondList, err := repo.List(ctx)
+	if err != nil {
+		t.Fatalf("While generating second list, error: %v", err)
+	}
+
+	if len(secondList) < 1 {
+		t.Fatalf("Second list has no elements")
+	}
+
+	if secondList[0].Title != "title" {
+		t.Errorf("second list return is not copy, expected=%s, got=%s", "title", secondList[0].Title)
+	}
+}
