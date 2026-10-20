@@ -79,7 +79,7 @@ func (th *TaskHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(idString)
 	if err != nil {
 		log.Println(err)
-		writeError(w, http.StatusBadRequest, "bad request")
+		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
 
@@ -96,4 +96,29 @@ func (th *TaskHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, task)
+}
+
+func (th *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	idString := r.PathValue("id")
+
+	id, err := uuid.Parse(idString)
+	if err != nil {
+		log.Println(err)
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	err = th.repo.Delete(r.Context(), id)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "resource not found")
+		return
+	}
+
+	if err != nil {
+		log.Println(err)
+		writeError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

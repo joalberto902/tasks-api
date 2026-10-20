@@ -25,6 +25,7 @@ func main() {
 	mux.HandleFunc("GET "+tasksEndpoint, taskHandler.List)
 	mux.HandleFunc("GET "+tasksEndpoint+idPath, taskHandler.Get)
 	mux.HandleFunc("POST "+tasksEndpoint, taskHandler.Create)
+	mux.HandleFunc("DELETE "+tasksEndpoint+idPath, taskHandler.Delete)
 
 	server := http.Server{
 		Addr:              port,
