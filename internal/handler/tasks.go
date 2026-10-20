@@ -11,6 +11,10 @@ import (
 	"github.com/joalberto902/tasks-api/internal/repository"
 )
 
+const (
+	maxBytes = 1 << 20
+)
+
 type TaskHandler struct {
 	repo repository.TaskRepository
 }
@@ -43,9 +47,15 @@ func (th *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Description string           `json:"description"`
 	}{}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 	if err := json.NewDecoder(r.Body).Decode(&arg); err != nil {
 		log.Println(err)
-		writeError(w, http.StatusBadRequest, "bad request")
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "json payload too large")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
 
@@ -85,7 +95,7 @@ func (th *TaskHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	task, err := th.repo.Get(r.Context(), id)
 	if errors.Is(err, repository.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "resource not found")
+		writeError(w, http.StatusNotFound, "task not found")
 		return
 	}
 
@@ -110,7 +120,7 @@ func (th *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	err = th.repo.Delete(r.Context(), id)
 	if errors.Is(err, repository.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "resource not found")
+		writeError(w, http.StatusNotFound, "task not found")
 		return
 	}
 
@@ -121,4 +131,61 @@ func (th *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (th *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
+	idString := r.PathValue("id")
+
+	id, err := uuid.Parse(idString)
+	if err != nil {
+		log.Println(err)
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	arg := struct {
+		Title       *string           `json:"title,omitempty"`
+		Status      *model.TaskStatus `json:"status,omitempty"`
+		Description *string           `json:"description,omitempty"`
+	}{}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+	if err := json.NewDecoder(r.Body).Decode(&arg); err != nil {
+		log.Println(err)
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "json payload too large")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	task, err := th.repo.Update(r.Context(), id, repository.UpdateTaskParams{
+		Title:       arg.Title,
+		Status:      arg.Status,
+		Description: arg.Description,
+	})
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+
+	if errors.Is(err, repository.ErrInvalidTitle) {
+		writeError(w, http.StatusBadRequest, "title field is invalid")
+		return
+	}
+
+	if errors.Is(err, repository.ErrInvalidStatus) {
+		writeError(w, http.StatusBadRequest, "status field is invalid")
+		return
+	}
+
+	if err != nil {
+		log.Println(err)
+		writeError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, task)
 }
