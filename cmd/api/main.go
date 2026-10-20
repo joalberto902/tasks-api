@@ -6,16 +6,22 @@ import (
 	"time"
 
 	"github.com/joalberto902/tasks-api/internal/handler"
+	"github.com/joalberto902/tasks-api/internal/repository"
 )
 
 const (
 	port           = ":8080"
 	healthEndpoint = "/health"
+	listEndpoint   = "/tasks"
 )
 
 func main() {
+	repo := repository.NewTaskRepository()
+	taskHandler := handler.NewTaskHandler(repo)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+healthEndpoint, handler.HealthHandler)
+	mux.HandleFunc("GET "+listEndpoint, taskHandler.List)
 
 	server := http.Server{
 		Addr:              port,
