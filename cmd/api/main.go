@@ -12,7 +12,7 @@ import (
 const (
 	port           = ":8080"
 	healthEndpoint = "/health"
-	listEndpoint   = "/tasks"
+	tasksEndpoint  = "/tasks"
 )
 
 func main() {
@@ -21,7 +21,8 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+healthEndpoint, handler.HealthHandler)
-	mux.HandleFunc("GET "+listEndpoint, taskHandler.List)
+	mux.HandleFunc("GET "+tasksEndpoint, taskHandler.List)
+	mux.HandleFunc("POST "+tasksEndpoint, taskHandler.Create)
 
 	server := http.Server{
 		Addr:              port,

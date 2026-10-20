@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 
+	"github.com/joalberto902/tasks-api/internal/model"
 	"github.com/joalberto902/tasks-api/internal/repository"
 )
 
@@ -30,4 +32,31 @@ func (th *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, list)
+}
+
+func (th *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
+	arg := struct {
+		Title       string           `json:"title"`
+		Status      model.TaskStatus `json:"status"`
+		Description string           `json:"description"`
+	}{}
+
+	if err := json.NewDecoder(r.Body).Decode(&arg); err != nil {
+		log.Println(err)
+		writeError(w, http.StatusBadRequest, "bad request")
+		return
+	}
+
+	task, err := th.repo.Create(r.Context(), repository.CreateTaskParams{
+		Title:       arg.Title,
+		Status:      arg.Status,
+		Description: arg.Description,
+	})
+	if err != nil {
+		log.Println(err)
+		writeError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, task)
 }
