@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 
@@ -52,6 +53,16 @@ func (th *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Status:      arg.Status,
 		Description: arg.Description,
 	})
+	if errors.Is(err, repository.ErrInvalidTitle) {
+		writeError(w, http.StatusBadRequest, "title field is invalid")
+		return
+	}
+
+	if errors.Is(err, repository.ErrInvalidStatus) {
+		writeError(w, http.StatusBadRequest, "status field is invalid")
+		return
+	}
+
 	if err != nil {
 		log.Println(err)
 		writeError(w, http.StatusInternalServerError, "internal server error")
