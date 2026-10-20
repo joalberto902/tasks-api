@@ -3,7 +3,9 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -467,5 +469,44 @@ func TestReturnedTasksAreCopies(t *testing.T) {
 
 	if secondList[0].Title != "title" {
 		t.Errorf("second list return is not copy, expected=%s, got=%s", "title", secondList[0].Title)
+	}
+}
+
+func TestConcurrentCreate(t *testing.T) {
+	var wg sync.WaitGroup
+	ctx := context.Background()
+	repo := NewTaskRepository()
+
+	for i := 0; i < 50; i++ {
+		wg.Go(func() {
+			name := fmt.Sprintf("test %d", i)
+			_, err := repo.Create(ctx, CreateTaskParams{
+				Title: name,
+			})
+
+			if err != nil {
+				t.Errorf("Error creating tasks in '%s': %v", name, err)
+			}
+		})
+	}
+
+	wg.Wait()
+
+	list, err := repo.List(ctx)
+	if err != nil {
+		t.Fatalf("Error while generating list: %v", err)
+	}
+
+	if len(list) != 50 {
+		t.Fatalf("Number of elements in Get list is wrong, expected=%d, got=%d", 50, len(list))
+	}
+
+	idSet := make(map[uuid.UUID]bool)
+	for _, task := range list {
+		idSet[task.ID] = true
+	}
+
+	if len(idSet) != 50 {
+		t.Fatalf("Number of unique uuids is wrong, expected=%d, got=%d", 50, len(idSet))
 	}
 }
