@@ -13,3 +13,9 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 		log.Println(err)
 	}
 }
+
+func writeError(w http.ResponseWriter, code int, msg string) {
+	v := map[string]string{"error": msg}
+
+	writeJSON(w, code, v)
+}
