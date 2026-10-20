@@ -13,6 +13,7 @@ const (
 	port           = ":8080"
 	healthEndpoint = "/health"
 	tasksEndpoint  = "/tasks"
+	idPath         = "/{id}"
 )
 
 func main() {
@@ -22,6 +23,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+healthEndpoint, handler.HealthHandler)
 	mux.HandleFunc("GET "+tasksEndpoint, taskHandler.List)
+	mux.HandleFunc("GET "+tasksEndpoint+idPath, taskHandler.Get)
 	mux.HandleFunc("POST "+tasksEndpoint, taskHandler.Create)
 
 	server := http.Server{

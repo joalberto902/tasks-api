@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/joalberto902/tasks-api/internal/model"
 	"github.com/joalberto902/tasks-api/internal/repository"
 )
@@ -70,4 +71,29 @@ func (th *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, task)
+}
+
+func (th *TaskHandler) Get(w http.ResponseWriter, r *http.Request) {
+	idString := r.PathValue("id")
+
+	id, err := uuid.Parse(idString)
+	if err != nil {
+		log.Println(err)
+		writeError(w, http.StatusBadRequest, "bad request")
+		return
+	}
+
+	task, err := th.repo.Get(r.Context(), id)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "resource not found")
+		return
+	}
+
+	if err != nil {
+		log.Println(err)
+		writeError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, task)
 }
