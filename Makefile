@@ -2,7 +2,7 @@ build: create vet fmt
 	go build -o ./bin/tasks-api ./cmd/api
 
 create:
-	mkdir bin
+	mkdir -p bin
 
 vet:
 	go vet ./...
