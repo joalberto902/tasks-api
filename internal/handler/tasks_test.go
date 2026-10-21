@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -181,6 +182,119 @@ func TestGet(t *testing.T) {
 				t.Errorf("Wrong error message in the body, expected=%s, got=%s", tt.expectedMessage, msg)
 			}
 
+		})
+	}
+}
+
+func TestCreate(t *testing.T) {
+
+	tests := []struct {
+		name            string
+		request         string
+		expectedCode    int
+		expectedTitle   string
+		expectedStatus  model.TaskStatus
+		expectedMessage string
+	}{
+		{
+			name:           "valid request",
+			request:        `{"title":"x"}`,
+			expectedCode:   http.StatusCreated,
+			expectedTitle:  "x",
+			expectedStatus: model.StatusTodo,
+		},
+		{
+			name:            "invalid json",
+			request:         `{"title":"x"`,
+			expectedCode:    http.StatusBadRequest,
+			expectedMessage: "invalid json",
+		},
+		{
+			name:            "empty title",
+			request:         `{"title": ""}`,
+			expectedCode:    http.StatusBadRequest,
+			expectedMessage: "title field is invalid",
+		},
+		{
+			name: "invalid status",
+			request: `{
+			"title": "x",
+			"status": "banana"
+			}`,
+			expectedCode:    http.StatusBadRequest,
+			expectedMessage: "status field is invalid",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := repository.NewTaskRepository()
+			th := NewTaskHandler(repo)
+			reader := strings.NewReader(tt.request)
+
+			r := httptest.NewRequest(http.MethodPost, "/tasks", reader)
+			w := httptest.NewRecorder()
+
+			th.Create(w, r)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tt.expectedCode {
+				t.Fatalf("wrong status code, expected=%d, got=%d", tt.expectedCode, resp.StatusCode)
+			}
+
+			contentHeader := resp.Header.Get("Content-Type")
+			if contentHeader != "application/json" {
+				t.Fatalf("wrong content-type header, expected=%s, got=%s", "application/json", contentHeader)
+			}
+
+			if tt.expectedCode == http.StatusCreated {
+				var body model.Task
+				if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+					t.Fatalf("failed to decode json response body err: %v", err)
+				}
+
+				_, err := repo.Get(context.Background(), body.ID)
+				if err != nil {
+					t.Fatalf("error fetching created task from the database: %v", err)
+				}
+
+				if body.Title != tt.expectedTitle {
+					t.Fatalf("wrong title in the response, expected=%s, got=%s", tt.expectedTitle,
+						body.Title)
+				}
+
+				if body.Status != tt.expectedStatus {
+					t.Fatalf("wrong status in the response, expected=%v, got=%v", tt.expectedStatus,
+						body.Status)
+				}
+
+				return
+			}
+
+			var body map[string]string
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("failed to decode json response body: %v", err)
+			}
+
+			lst, err := repo.List(context.Background())
+			if err != nil {
+				t.Fatalf("failed to fetch all the task stored in repo: %v", err)
+			}
+
+			if len(lst) != 0 {
+				t.Fatalf("something was wrongly recorded, expected=%d, got=%d", 0, len(lst))
+			}
+
+			msg, ok := body["error"]
+			if !ok {
+				t.Fatal("expected error message to exist")
+			}
+
+			if msg != tt.expectedMessage {
+				t.Fatalf("wrong error message, expected=%s, got=%s", tt.expectedMessage, msg)
+			}
 		})
 	}
 }
