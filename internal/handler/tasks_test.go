@@ -397,3 +397,127 @@ func TestDelete(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdate(t *testing.T) {
+	tests := []struct {
+		name                string
+		body                string
+		expectedCode        int
+		expectedTitle       string
+		expectedStatus      model.TaskStatus
+		expectedDescription string
+	}{
+		{
+			name:                "only title changes",
+			body:                `{"title": "new"}`,
+			expectedCode:        http.StatusOK,
+			expectedTitle:       "new",
+			expectedStatus:      model.StatusOngoing,
+			expectedDescription: "old",
+		},
+		{
+			name:                "empty new description",
+			body:                `{"description": ""}`,
+			expectedCode:        http.StatusOK,
+			expectedTitle:       "old",
+			expectedStatus:      model.StatusOngoing,
+			expectedDescription: "",
+		},
+		{
+			name:                "nothing changes",
+			body:                `{}`,
+			expectedCode:        http.StatusOK,
+			expectedTitle:       "old",
+			expectedStatus:      model.StatusOngoing,
+			expectedDescription: "old",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := repository.NewTaskRepository()
+			th := NewTaskHandler(repo)
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("PATCH /tasks/{id}", th.Update)
+
+			expectedTask, err := repo.Create(context.Background(),
+				repository.CreateTaskParams{
+					Title:       "old",
+					Status:      model.StatusOngoing,
+					Description: "old",
+				})
+			if err != nil {
+				t.Fatalf("failed to create expected test: %v", err)
+			}
+
+			requestBody := strings.NewReader(tt.body)
+
+			r := httptest.NewRequest(http.MethodPatch,
+				fmt.Sprintf("/tasks/%s", expectedTask.ID.String()), requestBody)
+			w := httptest.NewRecorder()
+
+			mux.ServeHTTP(w, r)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tt.expectedCode {
+				t.Errorf("Wrong status code, expected=%d, got=%d",
+					tt.expectedCode, resp.StatusCode)
+			}
+
+			contentHeader := resp.Header.Get("Content-Type")
+			if contentHeader != "application/json" {
+				t.Errorf("wrong Content-Type header, expected=%s, got=%s",
+					"application/json", contentHeader)
+			}
+
+			var body model.Task
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("failed to decode response body into json: %v", err)
+			}
+
+			repoTask, err := repo.Get(context.Background(), expectedTask.ID)
+			if err != nil {
+				t.Fatalf("failed to fetch the updated recorded task: %v", err)
+			}
+
+			if repoTask.Title != tt.expectedTitle {
+				t.Fatalf("wrong repository title, expected=%s, got=%s",
+					tt.expectedTitle, repoTask.Title)
+			}
+
+			if repoTask.Status != tt.expectedStatus {
+				t.Fatalf("wrong repository task status, expected=%s, got=%s",
+					tt.expectedStatus, repoTask.Status)
+			}
+
+			if repoTask.Description != tt.expectedDescription {
+				t.Fatalf("wrong repository description, expected=%s, got=%s",
+					tt.expectedDescription, repoTask.Description)
+			}
+
+			if body.ID != expectedTask.ID {
+				t.Fatalf("wrong response id, expected=%v, got=%v",
+					expectedTask.ID, body.ID)
+			}
+
+			if body.Title != tt.expectedTitle {
+				t.Fatalf("wrong response title, expected=%s, got=%s",
+					tt.expectedTitle, body.Title)
+			}
+
+			if body.Status != tt.expectedStatus {
+				t.Fatalf("wrong response task status, expected=%s, got=%s",
+					tt.expectedStatus, body.Status)
+			}
+
+			if body.Description != tt.expectedDescription {
+				t.Fatalf("wrong response description, expected=%s, got=%s",
+					tt.expectedDescription, body.Description)
+			}
+
+		})
+	}
+}
