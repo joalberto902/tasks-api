@@ -654,7 +654,7 @@ func TestPayloadTooLarge(t *testing.T) {
 	tests := []struct {
 		name            string
 		method          string
-		id            	bool 
+		id              bool
 		handler         func(w http.ResponseWriter, r *http.Request)
 		path            string
 		expectedCode    int
@@ -681,14 +681,14 @@ func TestPayloadTooLarge(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := repository.NewTaskRepository()
 			th := NewTaskHandler(repo)
-	
-			switch tt.method{
+
+			switch tt.method {
 			case http.MethodPost:
 				tt.handler = th.Create
 			case http.MethodPatch:
 				tt.handler = th.Update
 			}
-		
+
 			mux := http.NewServeMux()
 			mux.HandleFunc(tt.method+" "+tt.path, tt.handler)
 
@@ -782,5 +782,41 @@ func TestPayloadTooLarge(t *testing.T) {
 					expectedTask.Description, task.Description)
 			}
 		})
+	}
+}
+
+func TestHealth(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+
+	HealthHandler(w, r)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("wrong status code, expected=%d, got=%d",
+			http.StatusOK, resp.StatusCode)
+	}
+
+	contentHeader := resp.Header.Get("Content-Type")
+	if contentHeader != "application/json" {
+		t.Fatalf("wrong Content-Type header, expected=%s, got=%s",
+			"application/json", contentHeader)
+	}
+
+	var body map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode response body from json: %v", err)
+	}
+
+	msg, ok := body["status"]
+	if !ok {
+		t.Fatal("expected response body to contain status field")
+	}
+
+	if msg != "ok" {
+		t.Fatalf("wrong status message, expected=%s, got=%s",
+			"ok", msg)
 	}
 }
