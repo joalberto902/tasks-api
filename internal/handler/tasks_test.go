@@ -16,6 +16,43 @@ import (
 	"github.com/joalberto902/tasks-api/internal/repository"
 )
 
+var ErrTestDouble = errors.New("boom")
+
+type testDouble struct{}
+
+func NewDouble() *testDouble {
+	return &testDouble{}
+}
+
+func (td *testDouble) Create(
+	ctx context.Context,
+	arg repository.CreateTaskParams,
+) (model.Task, error) {
+	return model.Task{}, ErrTestDouble
+}
+
+func (td *testDouble) Get(ctx context.Context, id uuid.UUID) (model.Task, error) {
+	return model.Task{}, ErrTestDouble
+}
+
+func (td *testDouble) Update(
+	ctx context.Context,
+	id uuid.UUID,
+	arg repository.UpdateTaskParams,
+) (model.Task, error) {
+	return model.Task{}, ErrTestDouble
+}
+
+func (td *testDouble) Delete(ctx context.Context, id uuid.UUID) error {
+	return ErrTestDouble
+}
+
+func (td *testDouble) List(ctx context.Context) ([]model.Task, error) {
+	return nil, ErrTestDouble
+}
+
+var _ repository.TaskRepository = (*testDouble)(nil)
+
 func TestList(t *testing.T) {
 	repo := repository.NewTaskRepository()
 	th := NewTaskHandler(repo)
@@ -818,5 +855,128 @@ func TestHealth(t *testing.T) {
 	if msg != "ok" {
 		t.Fatalf("wrong status message, expected=%s, got=%s",
 			"ok", msg)
+	}
+}
+
+func TestInternalServerError(t *testing.T) {
+	repo := NewDouble()
+	th := NewTaskHandler(repo)
+	tests := []struct {
+		name            string
+		method          string
+		handler         func(http.ResponseWriter, *http.Request)
+		path            string
+		body            string
+		hasID           bool
+		expectedCode    int
+		expectedMessage string
+	}{
+		{
+			name:            "create",
+			method:          http.MethodPost,
+			handler:         th.Create,
+			path:            "/tasks",
+			body:            `{"title":"x"}`,
+			expectedCode:    http.StatusInternalServerError,
+			expectedMessage: "internal server error",
+		},
+		{
+			name:            "get",
+			method:          http.MethodGet,
+			handler:         th.Get,
+			path:            "/tasks/{id}",
+			hasID:           true,
+			expectedCode:    http.StatusInternalServerError,
+			expectedMessage: "internal server error",
+		},
+		{
+			name:            "update",
+			method:          http.MethodPatch,
+			handler:         th.Update,
+			path:            "/tasks/{id}",
+			body:            `{"title":"x"}`,
+			hasID:           true,
+			expectedCode:    http.StatusInternalServerError,
+			expectedMessage: "internal server error",
+		},
+		{
+			name:            "delete",
+			method:          http.MethodDelete,
+			handler:         th.Delete,
+			path:            "/tasks/{id}",
+			hasID:           true,
+			expectedCode:    http.StatusInternalServerError,
+			expectedMessage: "internal server error",
+		},
+		{
+			name:            "list",
+			method:          http.MethodGet,
+			handler:         th.List,
+			path:            "/tasks",
+			expectedCode:    http.StatusInternalServerError,
+			expectedMessage: "internal server error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc(tt.method+" "+tt.path, tt.handler)
+
+			if tt.hasID {
+				tt.path = strings.Replace(tt.path, "{id}", fmt.Sprintf("%s", uuid.Nil), -1)
+			}
+
+			var requestBody io.Reader
+			if tt.body == "" {
+				requestBody = nil
+			} else {
+				requestBody = strings.NewReader(tt.body)
+			}
+
+			r := httptest.NewRequest(tt.method, tt.path, requestBody)
+			w := httptest.NewRecorder()
+
+			mux.ServeHTTP(w, r)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tt.expectedCode {
+				t.Fatalf("wrong status code, expected=%d, got=%d",
+					tt.expectedCode, resp.StatusCode)
+			}
+
+			contentHeader := resp.Header.Get("Content-Type")
+			if contentHeader != "application/json" {
+				t.Fatalf("wrong Content-Type header, expected=%s, got=%s",
+					"application/json", contentHeader)
+			}
+
+			textBody, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("failed to read all response body: %v", err)
+			}
+
+			if strings.Contains(string(textBody), ErrTestDouble.Error()) {
+				t.Fatal("internal error message has leaked")
+			}
+
+			var body map[string]string
+			if err := json.Unmarshal(textBody, &body); err != nil {
+				t.Fatalf("failed to decode response body from json: %v", err)
+			}
+
+			msg, ok := body["error"]
+			if !ok {
+				t.Fatal("expected error field to exist in response body")
+			}
+
+			if msg != tt.expectedMessage {
+				t.Fatalf("wrong error message in response body, expected=%s, got=%s",
+					tt.expectedMessage, msg)
+			}
+
+		})
 	}
 }
