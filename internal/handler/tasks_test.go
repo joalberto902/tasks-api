@@ -521,3 +521,129 @@ func TestUpdate(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateErrors(t *testing.T) {
+	tests := []struct {
+		name            string
+		id              string
+		body            string
+		expectedCode    int
+		expectedMessage string
+	}{
+		{
+			name:            "invalid json",
+			body:            `{"title": "x"`,
+			expectedCode:    http.StatusBadRequest,
+			expectedMessage: "invalid json",
+		},
+		{
+			name:            "invalid title",
+			body:            `{"title": ""}`,
+			expectedCode:    http.StatusBadRequest,
+			expectedMessage: "title field is invalid",
+		},
+		{
+			name:            "invalid status",
+			body:            `{"status": "banana"}`,
+			expectedCode:    http.StatusBadRequest,
+			expectedMessage: "status field is invalid",
+		},
+		{
+			name:            "invalid id",
+			id:              "abc",
+			body:            `{}`,
+			expectedCode:    http.StatusBadRequest,
+			expectedMessage: "invalid id",
+		},
+		{
+			name:            "inexistent id",
+			id:              uuid.Nil.String(),
+			body:            `{}`,
+			expectedCode:    http.StatusNotFound,
+			expectedMessage: "task not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := repository.NewTaskRepository()
+			th := NewTaskHandler(repo)
+
+			expectedTask, err := repo.Create(context.Background(), repository.CreateTaskParams{
+				Title:       "old",
+				Status:      model.StatusOngoing,
+				Description: "old",
+			})
+			if err != nil {
+				t.Fatalf("failed to create test task: %v", err)
+			}
+
+			if tt.id == "" {
+				tt.id = expectedTask.ID.String()
+			}
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("PATCH /tasks/{id}", th.Update)
+
+			requestBody := strings.NewReader(tt.body)
+			r := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/tasks/%s", tt.id), requestBody)
+			w := httptest.NewRecorder()
+
+			mux.ServeHTTP(w, r)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tt.expectedCode {
+				t.Fatalf("wrong status code, expected=%d, got=%d",
+					tt.expectedCode, resp.StatusCode)
+			}
+
+			contentHeader := resp.Header.Get("Content-Type")
+			if contentHeader != "application/json" {
+				t.Fatalf("wrong Content-Type header, expected=%s, got=%s",
+					"application/json", contentHeader)
+			}
+
+			repoTask, err := repo.Get(context.Background(), expectedTask.ID)
+			if err != nil {
+				t.Fatalf("failed to fetch recorded task in the repository: %v", err)
+			}
+
+			if !repoTask.UpdatedAt.Equal(expectedTask.UpdatedAt) {
+				t.Fatalf("wrong update time in the recorded task, expected=%v, got=%v",
+					expectedTask.UpdatedAt, repoTask.UpdatedAt)
+			}
+
+			if repoTask.Title != expectedTask.Title {
+				t.Fatalf("wrong title in the recorded task, expected=%s, got=%s",
+					expectedTask.Title, repoTask.Title)
+			}
+
+			if repoTask.Status != expectedTask.Status {
+				t.Fatalf("wrong status in the recorded task, expected=%v, got=%v",
+					expectedTask.Status, repoTask.Status)
+			}
+
+			if repoTask.Description != expectedTask.Description {
+				t.Fatalf("wrong description in the recorded task, expected=%s, got=%s",
+					expectedTask.Description, repoTask.Description)
+			}
+
+			var body map[string]string
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("failed to decode response body from json: %v", err)
+			}
+
+			msg, ok := body["error"]
+			if !ok {
+				t.Fatal("expected error field to exist in the response")
+			}
+
+			if msg != tt.expectedMessage {
+				t.Fatalf("wrong message in the response error, expected=%s, got=%s",
+					tt.expectedMessage, msg)
+			}
+		})
+	}
+}
