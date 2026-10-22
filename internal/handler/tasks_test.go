@@ -3,7 +3,9 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -285,6 +287,103 @@ func TestCreate(t *testing.T) {
 
 			if len(lst) != 0 {
 				t.Fatalf("something was wrongly recorded, expected=%d, got=%d", 0, len(lst))
+			}
+
+			msg, ok := body["error"]
+			if !ok {
+				t.Fatal("expected error message to exist")
+			}
+
+			if msg != tt.expectedMessage {
+				t.Fatalf("wrong error message, expected=%s, got=%s", tt.expectedMessage, msg)
+			}
+		})
+	}
+}
+
+func TestDelete(t *testing.T) {
+	repo := repository.NewTaskRepository()
+	th := NewTaskHandler(repo)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /tasks/{id}", th.Delete)
+
+	expectedTask, err := repo.Create(context.Background(),
+		repository.CreateTaskParams{
+			Title: "x",
+		})
+	if err != nil {
+		t.Fatalf("failed to create test task: %v", err)
+	}
+
+	tests := []struct {
+		name            string
+		request         string
+		expectedCode    int
+		expectedMessage string
+	}{
+		{
+			name:         "existent valid id",
+			request:      fmt.Sprintf("/tasks/%s", expectedTask.ID.String()),
+			expectedCode: http.StatusNoContent,
+		},
+		{
+			name:            "inexistent valid id",
+			request:         fmt.Sprintf("/tasks/%s", uuid.Nil.String()),
+			expectedCode:    http.StatusNotFound,
+			expectedMessage: "task not found",
+		},
+		{
+			name:            "invalid id",
+			request:         "/tasks/abc",
+			expectedCode:    http.StatusBadRequest,
+			expectedMessage: "invalid id",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodDelete, tt.request, nil)
+			w := httptest.NewRecorder()
+
+			mux.ServeHTTP(w, r)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tt.expectedCode {
+				t.Fatalf("wrong status code, expected=%d, got=%d",
+					tt.expectedCode, resp.StatusCode)
+			}
+
+			if tt.expectedCode == http.StatusNoContent {
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					t.Fatalf("failed to read all the response body: %v", err)
+				}
+
+				if len(body) != 0 {
+					t.Fatalf("expected empty response body, expected=%q, got=%q",
+						"", string(body))
+				}
+				_, err = repo.Get(context.Background(), expectedTask.ID)
+				if !errors.Is(err, repository.ErrNotFound) {
+					t.Fatalf("task was not deleted from repository, expected=%v, got=%v",
+						repository.ErrNotFound, err)
+				}
+
+				return
+			}
+
+			contentHeader := resp.Header.Get("Content-Type")
+			if contentHeader != "application/json" {
+				t.Fatalf("wrong Content-Type header, expected=%s, got=%s",
+					"application/json", contentHeader)
+			}
+
+			var body map[string]string
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("failed decoding response body into json: %v", err)
 			}
 
 			msg, ok := body["error"]
