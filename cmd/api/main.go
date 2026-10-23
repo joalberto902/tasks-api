@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joalberto902/tasks-api/internal/handler"
 	"github.com/joalberto902/tasks-api/internal/repository"
 )
@@ -17,6 +20,25 @@ const (
 )
 
 func main() {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		log.Fatalln("DATABASE_URL is empty")
+	}
+
+	pool, err := pgxpool.New(context.Background(), url)
+	if err != nil {
+		log.Fatalf("creating pool: %v", err)
+	}
+	defer pool.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := pool.Ping(ctx); err != nil {
+		log.Fatalf("pinging database: %v", err)
+	}
+
+	log.Println("connection to database established")
+
 	repo := repository.NewTaskRepository()
 	taskHandler := handler.NewTaskHandler(repo)
 
