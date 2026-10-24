@@ -195,36 +195,42 @@ func TestPostgresDelete(t *testing.T) {
 	}
 }
 
-func compareTasks(t *testing.T, this model.Task, other model.Task) bool {
+func compareTasks(t *testing.T, recordedTask model.Task, task model.Task) bool {
 	t.Helper()
-	if this.ID != other.ID {
+	if recordedTask.ID != task.ID {
 		t.Errorf("wrong id recorded, expected=%v, got=%v",
-			other.ID, this.ID)
+			task.ID, recordedTask.ID)
 
 		return false
 	}
 
-	if !this.CreatedAt.Equal(other.CreatedAt) {
+	if !recordedTask.CreatedAt.Equal(task.CreatedAt) {
 		t.Errorf("wrong created at, expected=%v, got=%v",
-			other.CreatedAt, this.CreatedAt)
+			task.CreatedAt, recordedTask.CreatedAt)
 		return false
 	}
 
-	if !this.UpdatedAt.Equal(other.UpdatedAt) {
+	if !recordedTask.UpdatedAt.Equal(task.UpdatedAt) {
 		t.Errorf("wrong updated at, expected=%v, got=%v",
-			other.UpdatedAt, this.UpdatedAt)
+			task.UpdatedAt, recordedTask.UpdatedAt)
 		return false
 	}
 
-	if this.Status != other.Status {
+	if recordedTask.Title != task.Title {
+		t.Errorf("wrong title recorded, expected=%v, got=%v",
+			task.Title, recordedTask.Title)
+		return false
+	}
+
+	if recordedTask.Status != task.Status {
 		t.Errorf("wrong status recorded, expected=%v, got=%v",
-			other.Status, this.Status)
+			task.Status, recordedTask.Status)
 		return false
 	}
 
-	if this.Description != other.Description {
+	if recordedTask.Description != task.Description {
 		t.Errorf("wrong description recorded, expected=%v, got=%v",
-			other.Description, this.Description)
+			task.Description, recordedTask.Description)
 		return false
 	}
 
