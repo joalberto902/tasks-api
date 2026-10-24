@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -235,4 +236,66 @@ func compareTasks(t *testing.T, recordedTask model.Task, task model.Task) bool {
 	}
 
 	return true
+}
+
+func TestPostgresList(t *testing.T) {
+	pool := newTestPool(t)
+	repo := &postgresRepository{pool: pool}
+	ctx := context.Background()
+
+	testStorage := make([]model.Task, 3)
+	for i := range 3 {
+		task, err := repo.Create(ctx, CreateTaskParams{
+			Title:       fmt.Sprintf("title %d", i),
+			Status:      model.StatusOngoing,
+			Description: "description",
+		})
+		if err != nil {
+			t.Fatalf("creating task %d: %v", i, err)
+		}
+		t.Cleanup(func() {
+			err := repo.Delete(ctx, task.ID)
+			if err != nil {
+				t.Errorf("failed to cleanup: %v", err)
+			}
+		})
+
+		testStorage[i] = task
+	}
+
+	list, err := repo.List(ctx)
+	if err != nil {
+		t.Fatalf("getting list: %v", err)
+	}
+
+	i := 0
+	for j, recordedTask := range list {
+		if i < 3 {
+			task := testStorage[i]
+
+			if recordedTask.ID == task.ID {
+				if !compareTasks(t, recordedTask, task) {
+					return
+				}
+				i++
+			}
+		}
+
+		if recordedTask.CreatedAt.Location() != time.UTC {
+			t.Fatalf("wrong created at time in task %d, expected=%v, got=%v",
+				j, time.UTC, recordedTask.CreatedAt.Location())
+		}
+
+		if recordedTask.UpdatedAt.Location() != time.UTC {
+			t.Fatalf("wrong updated at time in task %d, expected=%v, got=%v",
+				j, time.UTC, recordedTask.UpdatedAt.Location())
+		}
+	}
+
+	if i != 3 {
+		// This is to maintain a count AND an order in the list,
+		// is List skips any of the values i does not update accordingly
+		t.Fatalf("wrong number of tasks tested, expected=%d, got=%d",
+			3, i)
+	}
 }
