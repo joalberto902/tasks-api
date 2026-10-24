@@ -4,28 +4,27 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joalberto902/tasks-api/internal/config"
 	"github.com/joalberto902/tasks-api/internal/handler"
 	"github.com/joalberto902/tasks-api/internal/repository"
 )
 
 const (
-	port           = ":8080"
 	healthEndpoint = "/health"
 	tasksEndpoint  = "/tasks"
 	idPath         = "/{id}"
 )
 
 func main() {
-	url := os.Getenv("DATABASE_URL")
-	if url == "" {
-		log.Fatalln("DATABASE_URL is empty")
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	pool, err := pgxpool.New(context.Background(), url)
+	pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("creating pool: %v", err)
 	}
@@ -51,16 +50,15 @@ func main() {
 	mux.HandleFunc("DELETE "+tasksEndpoint+idPath, taskHandler.Delete)
 
 	server := http.Server{
-		Addr:              port,
+		Addr:              ":" + cfg.Port,
 		Handler:           mux,
 		ReadHeaderTimeout: 2 * time.Second,
 		WriteTimeout:      10 * time.Second,
 		IdleTimeout:       30 * time.Second,
 	}
 
-	log.Printf("Serving on port: %s\n", port)
+	log.Printf("Serving on port: %s\n", cfg.Port)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalln(err)
 	}
-
 }
