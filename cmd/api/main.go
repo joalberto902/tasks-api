@@ -39,7 +39,7 @@ func main() {
 
 	log.Println("connection to database established")
 
-	repo := repository.NewTaskRepository()
+	repo := repository.NewPostgresRepository(pool)
 	taskHandler := handler.NewTaskHandler(repo)
 
 	mux := http.NewServeMux()

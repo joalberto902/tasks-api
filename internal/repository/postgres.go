@@ -17,6 +17,10 @@ type postgresRepository struct {
 	pool *pgxpool.Pool
 }
 
+func NewPostgresRepository(pool *pgxpool.Pool) TaskRepository {
+	return &postgresRepository{pool: pool}
+}
+
 func (pr *postgresRepository) dbCreate(
 	ctx context.Context,
 	task model.Task,
@@ -285,3 +289,5 @@ func (pr *postgresRepository) Update(
 
 	return recordedTask, nil
 }
+
+var _ TaskRepository = (*postgresRepository)(nil)
