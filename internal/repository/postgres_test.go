@@ -106,34 +106,8 @@ func TestPostgresCreate(t *testing.T) {
 		t.Fatalf("scanning row: %v", err)
 	}
 
-	if recordedTask.ID != task.ID {
-		t.Fatalf("wrong id recorded, expected=%v, got=%v",
-			task.ID, recordedTask.ID)
-	}
-
-	if !recordedTask.CreatedAt.Equal(task.CreatedAt) {
-		t.Fatalf("wrong created at, expected=%v, got=%v",
-			task.CreatedAt, recordedTask.CreatedAt)
-	}
-
-	if !recordedTask.UpdatedAt.Equal(task.UpdatedAt) {
-		t.Fatalf("wrong updated at, expected=%v, got=%v",
-			task.UpdatedAt, recordedTask.UpdatedAt)
-	}
-
-	if recordedTask.Title != task.Title {
-		t.Fatalf("wrong title recorded, expected=%v, got=%v",
-			task.Title, recordedTask.Title)
-	}
-
-	if recordedTask.Status != task.Status {
-		t.Fatalf("wrong status recorded, expected=%v, got=%v",
-			task.Status, recordedTask.Status)
-	}
-
-	if recordedTask.Description != task.Description {
-		t.Fatalf("wrong description recorded, expected=%v, got=%v",
-			task.Description, recordedTask.Description)
+	if !compareTasks(t, recordedTask, task) {
+		return
 	}
 }
 
@@ -166,44 +140,18 @@ func TestPostgresGet(t *testing.T) {
 		t.Fatalf("reading task: %v", err)
 	}
 
-	if recordedTask.ID != task.ID {
-		t.Fatalf("wrong id recorded, expected=%v, got=%v",
-			task.ID, recordedTask.ID)
-	}
-
-	if !recordedTask.CreatedAt.Equal(task.CreatedAt) {
-		t.Fatalf("wrong created at, expected=%v, got=%v",
-			task.CreatedAt, recordedTask.CreatedAt)
-	}
-
 	if recordedTask.CreatedAt.Location() != time.UTC {
-		t.Fatalf("wrong location on created at, expected=%v, got=%v",
-			time.UTC, task.CreatedAt.Location())
-	}
-
-	if !recordedTask.UpdatedAt.Equal(task.UpdatedAt) {
-		t.Fatalf("wrong updated at, expected=%v, got=%v",
-			task.UpdatedAt, recordedTask.UpdatedAt)
+		t.Fatalf("wrong location at created at, expected=%v, got=%v",
+			time.UTC, recordedTask.CreatedAt.Location())
 	}
 
 	if recordedTask.UpdatedAt.Location() != time.UTC {
-		t.Fatalf("wrong location on updated at, expected=%v, got=%v",
-			time.UTC, task.UpdatedAt.Location())
+		t.Fatalf("wrong location at created at, expected=%v, got=%v",
+			time.UTC, recordedTask.UpdatedAt.Location())
 	}
 
-	if recordedTask.Title != task.Title {
-		t.Fatalf("wrong title recorded, expected=%v, got=%v",
-			task.Title, recordedTask.Title)
-	}
-
-	if recordedTask.Status != task.Status {
-		t.Fatalf("wrong status recorded, expected=%v, got=%v",
-			task.Status, recordedTask.Status)
-	}
-
-	if recordedTask.Description != task.Description {
-		t.Fatalf("wrong description recorded, expected=%v, got=%v",
-			task.Description, recordedTask.Description)
+	if !compareTasks(t, recordedTask, task) {
+		return
 	}
 }
 
@@ -245,5 +193,40 @@ func TestPostgresDelete(t *testing.T) {
 		t.Fatalf("wrong error deleting not existent task, expected=%v, got=%v",
 			ErrNotFound, err)
 	}
+}
 
+func compareTasks(t *testing.T, this model.Task, other model.Task) bool {
+	t.Helper()
+	if this.ID != other.ID {
+		t.Errorf("wrong id recorded, expected=%v, got=%v",
+			other.ID, this.ID)
+
+		return false
+	}
+
+	if !this.CreatedAt.Equal(other.CreatedAt) {
+		t.Errorf("wrong created at, expected=%v, got=%v",
+			other.CreatedAt, this.CreatedAt)
+		return false
+	}
+
+	if !this.UpdatedAt.Equal(other.UpdatedAt) {
+		t.Errorf("wrong updated at, expected=%v, got=%v",
+			other.UpdatedAt, this.UpdatedAt)
+		return false
+	}
+
+	if this.Status != other.Status {
+		t.Errorf("wrong status recorded, expected=%v, got=%v",
+			other.Status, this.Status)
+		return false
+	}
+
+	if this.Description != other.Description {
+		t.Errorf("wrong description recorded, expected=%v, got=%v",
+			other.Description, this.Description)
+		return false
+	}
+
+	return true
 }

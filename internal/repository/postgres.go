@@ -163,3 +163,50 @@ func (pr *postgresRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 	return nil
 }
+
+func (pr *postgresRepository) List(ctx context.Context) ([]model.Task, error) {
+	listQuery := `
+	SELECT
+		id, 
+		created_at,
+		updated_at,
+		title,
+		status,
+		description
+	FROM tasks
+	ORDER BY created_at ASC, id;
+	`
+
+	rows, err := pr.pool.Query(ctx, listQuery)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	list := make([]model.Task, 0)
+	for rows.Next() {
+		var task model.Task
+		err := rows.Scan(
+			&task.ID,
+			&task.CreatedAt,
+			&task.UpdatedAt,
+			&task.Title,
+			&task.Status,
+			&task.Description,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		task.CreatedAt = task.CreatedAt.UTC()
+		task.UpdatedAt = task.UpdatedAt.UTC()
+		list = append(list, task)
+	}
+
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+
+	return list, nil
+}
