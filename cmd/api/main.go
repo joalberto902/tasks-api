@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,24 +20,30 @@ const (
 )
 
 func main() {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("loading config", "error", err)
+		os.Exit(1)
 	}
 
 	pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("creating pool: %v", err)
+		slog.Error("creating pool", "error", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := pool.Ping(ctx); err != nil {
-		log.Fatalf("pinging database: %v", err)
+		slog.Error("pinging database", "error", err)
+		os.Exit(1)
 	}
 
-	log.Println("connection to database established")
+	slog.Info("connection to database established")
 
 	repo := repository.NewPostgresRepository(pool)
 	taskHandler := handler.NewTaskHandler(repo)
@@ -57,8 +64,9 @@ func main() {
 		IdleTimeout:       30 * time.Second,
 	}
 
-	log.Printf("Serving on port: %s\n", cfg.Port)
+	slog.Info("serving on port", "port", cfg.Port)
 	if err := server.ListenAndServe(); err != nil {
-		log.Fatalln(err)
+		slog.Error("server failed", "error", err)
+		os.Exit(1)
 	}
 }
