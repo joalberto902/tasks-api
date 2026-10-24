@@ -147,3 +147,19 @@ func (pr *postgresRepository) Get(ctx context.Context, id uuid.UUID) (model.Task
 	task.UpdatedAt = task.UpdatedAt.UTC()
 	return task, nil
 }
+
+func (pr *postgresRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	deleteQuery := `DELETE FROM tasks WHERE id = $1;`
+
+	tag, err := pr.pool.Exec(ctx, deleteQuery, id)
+
+	if err != nil {
+		return err
+	}
+
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}

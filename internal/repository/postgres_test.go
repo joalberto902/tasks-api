@@ -206,3 +206,44 @@ func TestPostgresGet(t *testing.T) {
 			task.Description, recordedTask.Description)
 	}
 }
+
+func TestPostgresDelete(t *testing.T) {
+	pool := newTestPool(t)
+	repo := &postgresRepository{pool: pool}
+
+	task, err := repo.Create(context.Background(), CreateTaskParams{
+		Title: "x",
+	})
+	if err != nil {
+		t.Fatalf("creating task: %v", err)
+	}
+	t.Cleanup(func() {
+		deleteQuery := `DELETE FROM tasks WHERE id=$1;`
+		_, err := pool.Exec(context.Background(), deleteQuery, task.ID)
+		if err != nil {
+			t.Errorf("failed to delete from database: %v", err)
+		}
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err = repo.Delete(ctx, task.ID)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("wrong error with context canceled, expected=%v, got=%v",
+			context.Canceled, err)
+	}
+
+	err = repo.Delete(context.Background(), task.ID)
+	if err != nil {
+		t.Fatalf("failed to delete existing task, expected%v, got=%v",
+			nil, err)
+	}
+
+	err = repo.Delete(context.Background(), task.ID)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("wrong error deleting not existent task, expected=%v, got=%v",
+			ErrNotFound, err)
+	}
+
+}
