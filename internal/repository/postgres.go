@@ -210,3 +210,78 @@ func (pr *postgresRepository) List(ctx context.Context) ([]model.Task, error) {
 
 	return list, nil
 }
+
+func (pr *postgresRepository) Update(
+	ctx context.Context,
+	id uuid.UUID,
+	arg UpdateTaskParams,
+) (model.Task, error) {
+	_, err := pr.Get(ctx, id)
+	if err != nil {
+		return model.Task{}, err
+	}
+
+	if arg.Title != nil {
+		newTitle := strings.TrimSpace(*arg.Title)
+		if newTitle == "" {
+			return model.Task{}, ErrInvalidTitle
+		}
+		arg.Title = &newTitle
+	}
+
+	if arg.Status != nil {
+		newStatus := *arg.Status
+		if newStatus == "" {
+			newStatus = model.StatusTodo
+			arg.Status = &newStatus
+		}
+
+		if !newStatus.IsValid() {
+			return model.Task{}, ErrInvalidStatus
+		}
+	}
+	updateQuery := `
+	UPDATE tasks
+	SET updated_at = $1, 
+		title = COALESCE($2, title),
+		status = COALESCE($3, status),
+		description = COALESCE($4, description)
+	WHERE id = $5
+	RETURNING 
+		id,
+		created_at,
+		updated_at,
+		title,
+		status,
+		description;
+	`
+
+	row := pr.pool.QueryRow(ctx, updateQuery,
+		time.Now().UTC(),
+		arg.Title,
+		arg.Status,
+		arg.Description,
+		id)
+
+	var recordedTask model.Task
+	err = row.Scan(
+		&recordedTask.ID,
+		&recordedTask.CreatedAt,
+		&recordedTask.UpdatedAt,
+		&recordedTask.Title,
+		&recordedTask.Status,
+		&recordedTask.Description)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.Task{}, ErrNotFound
+	}
+
+	if err != nil {
+		return model.Task{}, err
+	}
+
+	recordedTask.CreatedAt = recordedTask.CreatedAt.UTC()
+	recordedTask.UpdatedAt = recordedTask.UpdatedAt.UTC()
+
+	return recordedTask, nil
+}

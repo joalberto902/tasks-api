@@ -299,3 +299,164 @@ func TestPostgresList(t *testing.T) {
 			3, i)
 	}
 }
+
+func TestPostgresUpdate(t *testing.T) {
+	tests := []struct {
+		name                string
+		title               *string
+		status              *model.TaskStatus
+		description         *string
+		expectedTitle       string
+		expectedStatus      model.TaskStatus
+		expectedDescription string
+		expectedErr         error
+	}{
+		{
+			name:                "title changes",
+			title:               new("   new  "),
+			expectedTitle:       "new",
+			expectedStatus:      model.StatusOngoing,
+			expectedDescription: "old",
+			expectedErr:         nil,
+		},
+		{
+			name:                "empty status",
+			status:              new(model.TaskStatus("")),
+			expectedTitle:       "old",
+			expectedStatus:      model.StatusTodo,
+			expectedDescription: "old",
+			expectedErr:         nil,
+		},
+		{
+			name:                "status changes",
+			status:              new(model.StatusDone),
+			expectedTitle:       "old",
+			expectedStatus:      model.StatusDone,
+			expectedDescription: "old",
+			expectedErr:         nil,
+		},
+		{
+			name:                "empty description",
+			description:         new(""),
+			expectedTitle:       "old",
+			expectedStatus:      model.StatusOngoing,
+			expectedDescription: "",
+			expectedErr:         nil,
+		},
+		{
+			name:                "nothings changes",
+			expectedTitle:       "old",
+			expectedStatus:      model.StatusOngoing,
+			expectedDescription: "old",
+			expectedErr:         nil,
+		},
+		{
+			name:        "invalid title",
+			title:       new(""),
+			expectedErr: ErrInvalidTitle,
+		},
+		{
+			name:        "invalid status",
+			status:      new(model.TaskStatus("banana")),
+			expectedErr: ErrInvalidStatus,
+		},
+		{
+			name:        "invalid id",
+			expectedErr: ErrNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := newTestPool(t)
+			repo := &postgresRepository{pool: pool}
+
+			task, err := repo.Create(context.Background(), CreateTaskParams{
+				Title:       "old",
+				Status:      model.StatusOngoing,
+				Description: "old",
+			})
+			if err != nil {
+				t.Fatalf("creating task in '%s': %v", tt.name, err)
+			}
+			t.Cleanup(func() {
+				err := repo.Delete(context.Background(), task.ID)
+				if err != nil {
+					t.Errorf("failed while cleaning up in test '%s': %v",
+						tt.name, err)
+				}
+			})
+
+			id := task.ID
+			if errors.Is(tt.expectedErr, ErrNotFound) {
+				id = uuid.Nil
+			}
+
+			recordedTask, err := repo.Update(context.Background(), id,
+				UpdateTaskParams{
+					Title:       tt.title,
+					Status:      tt.status,
+					Description: tt.description,
+				})
+
+			if !errors.Is(err, tt.expectedErr) {
+				t.Fatalf("wrong error while updating, expected=%v, got=%v",
+					tt.expectedErr, err)
+			}
+
+			if err != nil {
+				recordedTask, err := repo.Get(context.Background(), task.ID)
+				if err != nil {
+					t.Fatalf("reading task from database: %v", err)
+				}
+
+				compareTasks(t, recordedTask, task)
+				return
+			}
+
+			if recordedTask.CreatedAt.Location() != time.UTC {
+				t.Fatalf("wrong location in created at, expected=%v, got=%v",
+					time.UTC, recordedTask.CreatedAt.Location())
+			}
+
+			if recordedTask.UpdatedAt.Location() != time.UTC {
+				t.Fatalf("wrong location in updated at, expected=%v, got=%v",
+					time.UTC, recordedTask.UpdatedAt.Location())
+			}
+
+			if !recordedTask.CreatedAt.Equal(task.CreatedAt) {
+				t.Fatalf("wrong created at after update, expected=%v, got=%v",
+					task.CreatedAt, recordedTask.CreatedAt)
+			}
+
+			getTask, err := repo.Get(context.Background(), recordedTask.ID)
+			if err != nil {
+				t.Fatalf("reading task from database: %v", err)
+			}
+
+			if !compareTasks(t, getTask, recordedTask) {
+				return
+			}
+
+			if !getTask.UpdatedAt.After(task.UpdatedAt) {
+				t.Fatal("updated time is equal or before previous time")
+			}
+
+			if getTask.Title != tt.expectedTitle {
+				t.Fatalf("wrong title, expected=%s, got=%s",
+					tt.expectedTitle, getTask.Title)
+			}
+
+			if getTask.Status != tt.expectedStatus {
+				t.Fatalf("wrong status, expected=%v, got=%v",
+					tt.expectedStatus, getTask.Status)
+			}
+
+			if getTask.Description != tt.expectedDescription {
+				t.Fatalf("wrong description, expected=%v, got=%v",
+					tt.expectedDescription, getTask.Description)
+			}
+
+		})
+	}
+}
