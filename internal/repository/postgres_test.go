@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -33,7 +34,7 @@ func newTestPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-func TestCreateSuccess(t *testing.T) {
+func TestPostgresCreate(t *testing.T) {
 	pool := newTestPool(t)
 	repo := &postgresRepository{pool: pool}
 
@@ -118,6 +119,76 @@ func TestCreateSuccess(t *testing.T) {
 	if !recordedTask.UpdatedAt.Equal(task.UpdatedAt) {
 		t.Fatalf("wrong updated at, expected=%v, got=%v",
 			task.UpdatedAt, recordedTask.UpdatedAt)
+	}
+
+	if recordedTask.Title != task.Title {
+		t.Fatalf("wrong title recorded, expected=%v, got=%v",
+			task.Title, recordedTask.Title)
+	}
+
+	if recordedTask.Status != task.Status {
+		t.Fatalf("wrong status recorded, expected=%v, got=%v",
+			task.Status, recordedTask.Status)
+	}
+
+	if recordedTask.Description != task.Description {
+		t.Fatalf("wrong description recorded, expected=%v, got=%v",
+			task.Description, recordedTask.Description)
+	}
+}
+
+func TestPostgresGet(t *testing.T) {
+	pool := newTestPool(t)
+	repo := &postgresRepository{pool: pool}
+
+	ctx := context.Background()
+	task, err := repo.Create(ctx, CreateTaskParams{
+		Title: "x",
+	})
+	if err != nil {
+		t.Fatalf("creating task: %v", err)
+	}
+	t.Cleanup(func() {
+		deleteQuery := `DELETE FROM tasks WHERE id=$1;`
+		_, err := pool.Exec(ctx, deleteQuery, task.ID)
+		if err != nil {
+			t.Errorf("failed to delete from database: %v", err)
+		}
+	})
+
+	if _, err = repo.Get(ctx, uuid.Nil); !errors.Is(err, ErrNotFound) {
+		t.Errorf("wrong error while not existent valid id, expected=%v, got=%v",
+			ErrNotFound, err)
+	}
+
+	recordedTask, err := repo.Get(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("reading task: %v", err)
+	}
+
+	if recordedTask.ID != task.ID {
+		t.Fatalf("wrong id recorded, expected=%v, got=%v",
+			task.ID, recordedTask.ID)
+	}
+
+	if !recordedTask.CreatedAt.Equal(task.CreatedAt) {
+		t.Fatalf("wrong created at, expected=%v, got=%v",
+			task.CreatedAt, recordedTask.CreatedAt)
+	}
+
+	if recordedTask.CreatedAt.Location() != time.UTC {
+		t.Fatalf("wrong location on created at, expected=%v, got=%v",
+			time.UTC, task.CreatedAt.Location())
+	}
+
+	if !recordedTask.UpdatedAt.Equal(task.UpdatedAt) {
+		t.Fatalf("wrong updated at, expected=%v, got=%v",
+			task.UpdatedAt, recordedTask.UpdatedAt)
+	}
+
+	if recordedTask.UpdatedAt.Location() != time.UTC {
+		t.Fatalf("wrong location on updated at, expected=%v, got=%v",
+			time.UTC, task.UpdatedAt.Location())
 	}
 
 	if recordedTask.Title != task.Title {

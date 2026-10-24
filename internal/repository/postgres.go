@@ -2,10 +2,13 @@ package repository
 
 import (
 	"context"
-	"github.com/google/uuid"
+	"errors"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joalberto902/tasks-api/internal/model"
 )
@@ -103,5 +106,44 @@ func (pr *postgresRepository) Create(
 		return model.Task{}, err
 	}
 
+	return task, nil
+}
+
+func (pr *postgresRepository) Get(ctx context.Context, id uuid.UUID) (model.Task, error) {
+	getQuery := `
+	SELECT 
+		id,
+		created_at,
+		updated_at,
+		title,
+		status,
+		description
+	FROM tasks
+	WHERE id = $1;
+	`
+
+	row := pr.pool.QueryRow(ctx, getQuery, id)
+
+	var task model.Task
+
+	err := row.Scan(
+		&task.ID,
+		&task.CreatedAt,
+		&task.UpdatedAt,
+		&task.Title,
+		&task.Status,
+		&task.Description,
+	)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.Task{}, ErrNotFound
+	}
+
+	if err != nil {
+		return model.Task{}, err
+	}
+
+	task.CreatedAt = task.CreatedAt.UTC()
+	task.UpdatedAt = task.UpdatedAt.UTC()
 	return task, nil
 }
