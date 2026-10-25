@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -64,9 +67,32 @@ func main() {
 		IdleTimeout:       30 * time.Second,
 	}
 
+	idleConnsClose := make(chan struct{})
+	go func() {
+		signCtx, stop := signal.NotifyContext(context.Background(),
+			os.Interrupt,
+			syscall.SIGTERM)
+		defer stop()
+
+		<-signCtx.Done()
+
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(),
+			10*time.Second)
+		defer shutdownCancel()
+
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			slog.Error("server shutdown", "error", err)
+		}
+		close(idleConnsClose)
+	}()
+
 	slog.Info("serving on port", "port", cfg.Port)
-	if err := server.ListenAndServe(); err != nil {
+	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server failed", "error", err)
 		os.Exit(1)
 	}
+
+	<-idleConnsClose
+
+	slog.Info("server shutdown")
 }
