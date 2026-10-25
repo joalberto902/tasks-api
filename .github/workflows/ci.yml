@@ -2,7 +2,23 @@ name: CI
 on: [push, pull_request]
 jobs:
   test:
-    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: 'postgres://postgres:dev@localhost:5432/tasks'
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        ports:
+          - '5432:5432'
+        env:
+          POSTGRES_PASSWORD: 'dev'
+          POSTGRES_DB: 'tasks'
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -11,4 +27,5 @@ jobs:
           cache-dependency-path: 'go.sum'
       - run: go vet ./...
       - run: go build ./...
-      - run: go test -race ./...
+      - run: psql "$DATABASE_URL" -f migrations/001_create_tasks_up.sql
+      - run: go test -v -race ./...
