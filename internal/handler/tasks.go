@@ -3,7 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -30,14 +30,17 @@ func NewTaskHandler(repo repository.TaskRepository) *TaskHandler {
 func (th *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 	list, err := th.repo.List(r.Context())
 	if err != nil {
-		log.Println(err)
-		writeError(w,
+		slog.Error("listing tasks",
+			"error", err,
+			"method", r.Method,
+			"path", r.URL.Path)
+		writeError(w, r,
 			http.StatusInternalServerError,
 			"internal server error")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, list)
+	writeJSON(w, r, http.StatusOK, list)
 }
 
 func (th *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -49,13 +52,16 @@ func (th *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 	if err := json.NewDecoder(r.Body).Decode(&arg); err != nil {
-		log.Println(err)
-		var maxBytesErr *http.MaxBytesError
-		if errors.As(err, &maxBytesErr) {
-			writeError(w, http.StatusRequestEntityTooLarge, "json payload too large")
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			writeError(w, r,
+				http.StatusRequestEntityTooLarge,
+				"json payload too large")
 			return
 		}
-		writeError(w, http.StatusBadRequest, "invalid json")
+
+		writeError(w, r,
+			http.StatusBadRequest,
+			"invalid json")
 		return
 	}
 
@@ -65,22 +71,32 @@ func (th *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Description: arg.Description,
 	})
 	if errors.Is(err, repository.ErrInvalidTitle) {
-		writeError(w, http.StatusBadRequest, "title field is invalid")
+		writeError(w, r,
+			http.StatusBadRequest,
+			"title field is invalid")
 		return
 	}
 
 	if errors.Is(err, repository.ErrInvalidStatus) {
-		writeError(w, http.StatusBadRequest, "status field is invalid")
+		writeError(w, r,
+			http.StatusBadRequest,
+			"status field is invalid")
 		return
 	}
 
 	if err != nil {
-		log.Println(err)
-		writeError(w, http.StatusInternalServerError, "internal server error")
+		slog.Error("creating task",
+			"error", err,
+			"method", r.Method,
+			"path", r.URL.Path)
+
+		writeError(w, r,
+			http.StatusInternalServerError,
+			"internal server error")
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, task)
+	writeJSON(w, r, http.StatusCreated, task)
 }
 
 func (th *TaskHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -88,24 +104,33 @@ func (th *TaskHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	id, err := uuid.Parse(idString)
 	if err != nil {
-		log.Println(err)
-		writeError(w, http.StatusBadRequest, "invalid id")
+		writeError(w, r,
+			http.StatusBadRequest,
+			"invalid id")
 		return
 	}
 
 	task, err := th.repo.Get(r.Context(), id)
 	if errors.Is(err, repository.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "task not found")
+		writeError(w, r,
+			http.StatusNotFound,
+			"task not found")
 		return
 	}
 
 	if err != nil {
-		log.Println(err)
-		writeError(w, http.StatusInternalServerError, "internal server error")
+		slog.Error("reading task",
+			"error", err,
+			"method", r.Method,
+			"path", r.URL.Path)
+
+		writeError(w, r,
+			http.StatusInternalServerError,
+			"internal server error")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, task)
+	writeJSON(w, r, http.StatusOK, task)
 }
 
 func (th *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -113,20 +138,29 @@ func (th *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	id, err := uuid.Parse(idString)
 	if err != nil {
-		log.Println(err)
-		writeError(w, http.StatusBadRequest, "invalid id")
+		writeError(w, r,
+			http.StatusBadRequest,
+			"invalid id")
 		return
 	}
 
 	err = th.repo.Delete(r.Context(), id)
 	if errors.Is(err, repository.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "task not found")
+		writeError(w, r,
+			http.StatusNotFound,
+			"task not found")
 		return
 	}
 
 	if err != nil {
-		log.Println(err)
-		writeError(w, http.StatusInternalServerError, "internal server error")
+		slog.Error("deleting task",
+			"error", err,
+			"method", r.Method,
+			"path", r.URL.Path)
+
+		writeError(w, r,
+			http.StatusInternalServerError,
+			"internal server error")
 		return
 	}
 
@@ -138,8 +172,9 @@ func (th *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	id, err := uuid.Parse(idString)
 	if err != nil {
-		log.Println(err)
-		writeError(w, http.StatusBadRequest, "invalid id")
+		writeError(w, r,
+			http.StatusBadRequest,
+			"invalid id")
 		return
 	}
 
@@ -151,13 +186,15 @@ func (th *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 	if err := json.NewDecoder(r.Body).Decode(&arg); err != nil {
-		log.Println(err)
-		var maxBytesErr *http.MaxBytesError
-		if errors.As(err, &maxBytesErr) {
-			writeError(w, http.StatusRequestEntityTooLarge, "json payload too large")
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			writeError(w, r,
+				http.StatusRequestEntityTooLarge,
+				"json payload too large")
 			return
 		}
-		writeError(w, http.StatusBadRequest, "invalid json")
+		writeError(w, r,
+			http.StatusBadRequest,
+			"invalid json")
 		return
 	}
 
@@ -167,25 +204,37 @@ func (th *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Description: arg.Description,
 	})
 	if errors.Is(err, repository.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "task not found")
+		writeError(w, r,
+			http.StatusNotFound,
+			"task not found")
 		return
 	}
 
 	if errors.Is(err, repository.ErrInvalidTitle) {
-		writeError(w, http.StatusBadRequest, "title field is invalid")
+		writeError(w, r,
+			http.StatusBadRequest,
+			"title field is invalid")
 		return
 	}
 
 	if errors.Is(err, repository.ErrInvalidStatus) {
-		writeError(w, http.StatusBadRequest, "status field is invalid")
+		writeError(w, r,
+			http.StatusBadRequest,
+			"status field is invalid")
 		return
 	}
 
 	if err != nil {
-		log.Println(err)
-		writeError(w, http.StatusInternalServerError, "internal server error")
+		slog.Error("updating task",
+			"error", err,
+			"method", r.Method,
+			"path", r.URL.Path)
+
+		writeError(w, r,
+			http.StatusInternalServerError,
+			"internal server error")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, task)
+	writeJSON(w, r, http.StatusOK, task)
 }

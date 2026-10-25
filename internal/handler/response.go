@@ -2,20 +2,23 @@ package handler
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 )
 
-func writeJSON(w http.ResponseWriter, code int, v any) {
+func writeJSON(w http.ResponseWriter, r *http.Request, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		log.Println(err)
+		slog.Error("writing json response",
+			"error", err,
+			"method", r.Method,
+			"path", r.URL.Path)
 	}
 }
 
-func writeError(w http.ResponseWriter, code int, msg string) {
+func writeError(w http.ResponseWriter, r *http.Request, code int, msg string) {
 	v := map[string]string{"error": msg}
 
-	writeJSON(w, code, v)
+	writeJSON(w, r, code, v)
 }
